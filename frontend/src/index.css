@@ -1,0 +1,64 @@
+/* Tailwind base, components, utilities */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Full height and dark background for the whole page */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: black; /* TikTok-like dark background */
+  overflow-x: hidden; /* Prevent horizontal scroll */
+}
+
+/* Smooth scrolling for feed */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* Video styling: cover container */
+video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Overlay text for username, caption, stats */
+.video-overlay {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  color: white;
+  z-index: 10;
+}
+
+/* Username style */
+.username {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+/* Caption style */
+.caption {
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+/* Video stats like likes and comments */
+.video-stats {
+  display: flex;
+  gap: 1rem;
+  margin-top: 4px;
+  font-size: 0.85rem;
+}
+
+/* Optional: fade overlay for better text visibility */
+.video-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+  z-index: -1;
+  border-radius: 8px;
+}
