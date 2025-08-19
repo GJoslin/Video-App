@@ -1,13 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Heart, MessageCircle, Share, Bookmark, MoreHorizontal, Music, Plus } from 'lucide-react';
+import { videos as videoAPI, users as userAPI, utils } from '../services/api';
 
-function VideoCard({ video, isActive }) {
+function VideoCard({ video, isActive, onUpdateVideo }) {
   const videoRef = useRef(null);
   const [isLiked, setIsLiked] = useState(video.isLiked);
   const [isBookmarked, setIsBookmarked] = useState(video.isBookmarked);
   const [isFollowing, setIsFollowing] = useState(video.isFollowing);
   const [likeCount, setLikeCount] = useState(video.likes);
+  const [bookmarkCount, setBookmarkCount] = useState(video.bookmarks);
+  const [shareCount, setShareCount] = useState(video.shares);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isActive && videoRef.current) {
@@ -19,9 +23,113 @@ function VideoCard({ video, isActive }) {
     }
   }, [isActive]);
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    setLikeCount(prev => isLiked ? prev - 1 : prev + 1);
+  const handleLike = async () => {
+    if (!utils.isAuthenticated()) {
+      alert('Please log in to like videos');
+      return;
+    }
+
+    if (loading) return;
+    setLoading(true);
+
+    try {
+      const response = await videoAPI.like(video.id);
+      
+      setIsLiked(response.isLiked);
+      setLikeCount(response.likes);
+      
+      // Update parent component
+      onUpdateVideo(video.id, {
+        isLiked: response.isLiked,
+        likes: response.likes
+      });
+    } catch (error) {
+      console.error('Error liking video:', error);
+      alert('Failed to like video');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBookmark = async () => {
+    if (!utils.isAuthenticated()) {
+      alert('Please log in to bookmark videos');
+      return;
+    }
+
+    if (loading) return;
+    setLoading(true);
+
+    try {
+      const response = await videoAPI.bookmark(video.id);
+      
+      setIsBookmarked(response.isBookmarked);
+      setBookmarkCount(response.bookmarks);
+      
+      // Update parent component
+      onUpdateVideo(video.id, {
+        isBookmarked: response.isBookmarked,
+        bookmarks: response.bookmarks
+      });
+    } catch (error) {
+      console.error('Error bookmarking video:', error);
+      alert('Failed to bookmark video');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (loading) return;
+    setLoading(true);
+
+    try {
+      // Copy to clipboard
+      await navigator.clipboard.writeText(window.location.origin + `/video/${video.id}`);
+      
+      // Update share count in backend
+      if (utils.isAuthenticated()) {
+        const response = await videoAPI.share(video.id);
+        setShareCount(response.shares);
+        
+        onUpdateVideo(video.id, {
+          shares: response.shares
+        });
+      }
+      
+      alert('Link copied to clipboard!');
+    } catch (error) {
+      console.error('Error sharing video:', error);
+      alert('Failed to share video');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!utils.isAuthenticated()) {
+      alert('Please log in to follow users');
+      return;
+    }
+
+    if (loading) return;
+    setLoading(true);
+
+    try {
+      // Get user ID from video data (you might need to add this to your video response)
+      const response = await userAPI.follow(video.uploadedBy || video.userId);
+      
+      setIsFollowing(response.isFollowing);
+      
+      onUpdateVideo(video.id, {
+        isFollowing: response.isFollowing
+      });
+    } catch (error) {
+      console.error('Error following user:', error);
+      alert('Failed to follow user');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVideoClick = () => {
@@ -40,6 +148,11 @@ function VideoCard({ video, isActive }) {
     return count.toString();
   };
 
+  const handleCommentClick = () => {
+    // You can implement a comment modal here
+    alert('Comments feature coming soon!');
+  };
+
   return (
     <div className="relative h-screen w-full bg-black overflow-hidden">
       {/* Video Element */}
@@ -51,6 +164,9 @@ function VideoCard({ video, isActive }) {
         muted
         playsInline
         onClick={handleVideoClick}
+        onError={(e) => {
+          console.error('Video load error:', e);
+        }}
       />
 
       {/* Play/Pause Indicator */}
@@ -62,19 +178,30 @@ function VideoCard({ video, isActive }) {
         </div>
       )}
 
+      {/* Loading Overlay */}
+      {loading && (
+        <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center z-40">
+          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      )}
+
       {/* Right Side Actions */}
       <div className="absolute right-3 bottom-20 flex flex-col items-center space-y-6">
         {/* Profile Picture + Follow Button */}
         <div className="relative">
           <img
-            src={video.avatar}
+            src={video.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face"}
             alt={video.username}
             className="w-12 h-12 rounded-full border-2 border-white object-cover"
+            onError={(e) => {
+              e.target.src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face";
+            }}
           />
-          {!isFollowing && (
+          {!isFollowing && utils.isAuthenticated() && (
             <button
-              onClick={() => setIsFollowing(true)}
-              className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center"
+              onClick={handleFollow}
+              disabled={loading}
+              className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 transition-colors disabled:opacity-50"
             >
               <Plus className="w-4 h-4 text-white" />
             </button>
@@ -85,8 +212,9 @@ function VideoCard({ video, isActive }) {
         <div className="flex flex-col items-center">
           <button
             onClick={handleLike}
-            className={`p-3 rounded-full transition-all duration-200 ${
-              isLiked ? 'bg-red-500' : 'bg-black bg-opacity-20'
+            disabled={loading}
+            className={`p-3 rounded-full transition-all duration-200 hover:scale-110 disabled:opacity-50 ${
+              isLiked ? 'bg-red-500' : 'bg-black bg-opacity-20 hover:bg-opacity-40'
             }`}
           >
             <Heart 
@@ -100,7 +228,10 @@ function VideoCard({ video, isActive }) {
 
         {/* Comment Button */}
         <div className="flex flex-col items-center">
-          <button className="p-3 bg-black bg-opacity-20 rounded-full">
+          <button 
+            onClick={handleCommentClick}
+            className="p-3 bg-black bg-opacity-20 rounded-full hover:bg-opacity-40 transition-all duration-200 hover:scale-110"
+          >
             <MessageCircle className="w-6 h-6 text-white" />
           </button>
           <span className="text-white text-xs mt-1 font-semibold">
@@ -111,9 +242,10 @@ function VideoCard({ video, isActive }) {
         {/* Bookmark Button */}
         <div className="flex flex-col items-center">
           <button
-            onClick={() => setIsBookmarked(!isBookmarked)}
-            className={`p-3 rounded-full transition-all duration-200 ${
-              isBookmarked ? 'bg-yellow-500' : 'bg-black bg-opacity-20'
+            onClick={handleBookmark}
+            disabled={loading}
+            className={`p-3 rounded-full transition-all duration-200 hover:scale-110 disabled:opacity-50 ${
+              isBookmarked ? 'bg-yellow-500' : 'bg-black bg-opacity-20 hover:bg-opacity-40'
             }`}
           >
             <Bookmark 
@@ -121,22 +253,26 @@ function VideoCard({ video, isActive }) {
             />
           </button>
           <span className="text-white text-xs mt-1 font-semibold">
-            {formatCount(video.bookmarks)}
+            {formatCount(bookmarkCount)}
           </span>
         </div>
 
         {/* Share Button */}
         <div className="flex flex-col items-center">
-          <button className="p-3 bg-black bg-opacity-20 rounded-full">
+          <button 
+            onClick={handleShare}
+            disabled={loading}
+            className="p-3 bg-black bg-opacity-20 rounded-full hover:bg-opacity-40 transition-all duration-200 hover:scale-110 disabled:opacity-50"
+          >
             <Share className="w-6 h-6 text-white" />
           </button>
           <span className="text-white text-xs mt-1 font-semibold">
-            {formatCount(video.shares)}
+            {formatCount(shareCount)}
           </span>
         </div>
 
         {/* More Options */}
-        <button className="p-3 bg-black bg-opacity-20 rounded-full">
+        <button className="p-3 bg-black bg-opacity-20 rounded-full hover:bg-opacity-40 transition-all duration-200 hover:scale-110">
           <MoreHorizontal className="w-6 h-6 text-white" />
         </button>
 
@@ -157,12 +293,13 @@ function VideoCard({ video, isActive }) {
           {/* Username and Follow Button */}
           <div className="flex items-center mb-2">
             <span className="text-white font-semibold text-lg">@{video.username}</span>
-            {!isFollowing && (
+            {!isFollowing && utils.isAuthenticated() && (
               <button
-                onClick={() => setIsFollowing(true)}
-                className="ml-3 px-4 py-1 border border-white text-white text-sm font-semibold rounded hover:bg-white hover:text-black transition-all duration-200"
+                onClick={handleFollow}
+                disabled={loading}
+                className="ml-3 px-4 py-1 border border-white text-white text-sm font-semibold rounded hover:bg-white hover:text-black transition-all duration-200 disabled:opacity-50"
               >
-                Follow
+                {loading ? 'Following...' : 'Follow'}
               </button>
             )}
           </div>
@@ -179,7 +316,7 @@ function VideoCard({ video, isActive }) {
           <div className="flex items-center">
             <Music className="w-4 h-4 text-white mr-2" />
             <p className="text-white text-xs opacity-80 flex-1 truncate">
-              {video.music}
+              {video.music || "Original Sound"}
             </p>
           </div>
         </div>
